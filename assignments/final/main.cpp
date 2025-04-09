@@ -4,6 +4,7 @@
 #include <ew/external/glad.h>
 #include <ew/shader.h>
 #include <ew/model.h>
+#include <ew/procGen.h>
 #include <ew/camera.h>
 #include <ew/transform.h>
 #include <ew/cameraController.h>
@@ -31,11 +32,14 @@ struct Material {
 	float Shininess = 128;
 }material;
 
-
 // Init Assets
-ew::Transform monkeyTransform;
+ew::Transform tralaTransform;
+ew::Transform planeTransform;
 ew::Camera camera;
 ew::CameraController cameraController;
+
+unsigned int ppFBO;
+unsigned int ppTex;
 
 void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	camera->position = glm::vec3(0, 0, 5.0f);
@@ -48,12 +52,17 @@ int main() {
 	GLFWwindow* window = initWindow("Beautiful Awesome OpenGL", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
-	ew::Shader shader = ew::Shader("assets/lit.vert", "assets/lit.frag");
-	ew::Model monkeyModel = ew::Model("assets/tralalero_tralala.fbx");
-	GLuint tralaTexture = ew::loadTexture("assets/tralalero_color.png");
-	GLuint metalNormal = ew::loadTexture("assets/metal_normal.png");
+	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader ppShader = ew::Shader("assets/pp.vert", "assets/pp.frag");
 
-	camera.position = glm::vec3(0.0f, 0.0f, 5.0f);
+	ew::Model tralaModel = ew::Model("assets/tralalero_tralala.fbx");
+	GLuint tralaTexture = ew::loadTexture("assets/tralalero_color.png");
+	ew::Mesh plane = ew::Mesh(ew::createPlane(4.0f, 4.0f, 1));
+	GLuint glowTexture = ew::loadTexture("assets/plane_color.jpg");
+
+	tralaTransform.scale *= 0.1f;
+
+	camera.position = glm::vec3(0.0f, 2.0f, 4.0f);
 	camera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 90.0f;
@@ -63,6 +72,17 @@ int main() {
 	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
 
+	glGenFramebuffers(1, &ppFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, ppFBO);
+
+	glGenTextures(1, &ppTex);
+	glBindTexture(GL_TEXTURE_2D, ppTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1080, 720, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ppTex, 0);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -71,32 +91,49 @@ int main() {
 		prevFrameTime = time;
 
 		//RENDER
-		glClearColor(0.6f,0.8f,0.92f,1.0f);
+		glClearColor(0.1f,0.1f,0.1f,1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		monkeyTransform.rotation = glm::rotate(monkeyTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
+		tralaTransform.rotation = glm::rotate(tralaTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 
 		cameraController.move(window, &camera, deltaTime);
 
-		glBindTextureUnit(0, tralaTexture);
-		glBindTextureUnit(1, metalNormal);
+		// First Pass
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-		shader.use();
-		shader.setInt("_MainTex", 0);
-		shader.setInt("_NormalMap", 1);
-		shader.setVec3("_EyePos", camera.position);
-		shader.setMat4("_Model", monkeyTransform.modelMatrix());
-		shader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
-		shader.setFloat("_Material.Ka", material.Ka);
-		shader.setFloat("_Material.Kd", material.Kd);
-		shader.setFloat("_Material.Ks", material.Ks);
-		shader.setFloat("_Material.Shininess", material.Shininess);
-		monkeyModel.draw();
+		glBindTextureUnit(0, tralaTexture);
+
+		litShader.use();
+		litShader.setInt("_MainTex", 0);
+		litShader.setVec3("_EyePos", camera.position);
+		litShader.setMat4("_Model", tralaTransform.modelMatrix());
+		litShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
+		litShader.setFloat("_Material.Ka", material.Ka);
+		litShader.setFloat("_Material.Kd", material.Kd);
+		litShader.setFloat("_Material.Ks", material.Ks);
+		litShader.setFloat("_Material.Shininess", material.Shininess);
+		litShader.setInt("_Settings.NormalMap", false);
+		tralaModel.draw();
+
+		glBindTextureUnit(0, glowTexture);
+
+		litShader.setInt("_MainTex", 0);
+		litShader.setInt("_Settings.NormalMap", false);
+		litShader.setMat4("_Model", planeTransform.modelMatrix());
+		plane.draw();
+
+		// Second Pass
+		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+
 
 		drawUI();
 
 		glfwSwapBuffers(window);
 	}
+
+	glDeleteFramebuffers(1, &ppFBO);
+
 	printf("Shutting down...");
 }
 
@@ -115,7 +152,6 @@ void drawUI() {
 		ImGui::SliderFloat("SpecularK", &material.Ks, 0.0f, 1.0f);
 		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
 	}
-
 	ImGui::End();
 
 	ImGui::Render();

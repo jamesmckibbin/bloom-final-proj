@@ -23,7 +23,7 @@ struct Material{
 };
 
 struct MiscSettings{
-	bool normalMap;
+	bool NormalMap;
 };
 
 uniform Material _Material;
@@ -36,7 +36,7 @@ void main(){
 	vec3 toLight;
 	vec3 toEye;
 
-	if (_Settings.normalMap) {
+	if (_Settings.NormalMap) {
 		normal = texture(_NormalMap, fs_in.TexCoord).rgb;
 		normal = normalize(normal * 2.0 - 1.0);
 		normal = normalize(fs_in.TBN * normal);
