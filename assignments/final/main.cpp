@@ -14,6 +14,7 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <iostream>
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
@@ -39,7 +40,10 @@ ew::Camera camera;
 ew::CameraController cameraController;
 
 unsigned int ppFBO;
+unsigned int ppRBO;
 unsigned int ppTex;
+unsigned int depTex;
+unsigned int dummyVAO;
 
 void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	camera->position = glm::vec3(0, 0, 5.0f);
@@ -72,6 +76,7 @@ int main() {
 	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
 
+	// Set Up Post Processing Frame Buffer
 	glGenFramebuffers(1, &ppFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, ppFBO);
 
@@ -83,6 +88,16 @@ int main() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ppTex, 0);
 
+	glGenRenderbuffers(1, &ppRBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, ppRBO);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1080, 720);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ppRBO);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	glCreateVertexArrays(1, &dummyVAO);
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -91,18 +106,17 @@ int main() {
 		prevFrameTime = time;
 
 		//RENDER
-		glClearColor(0.1f,0.1f,0.1f,1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 		tralaTransform.rotation = glm::rotate(tralaTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
 
 		cameraController.move(window, &camera, deltaTime);
 
-		// First Pass
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		// FIRST PASS
+		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO);
+		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_DEPTH_TEST);
 
 		glBindTextureUnit(0, tralaTexture);
-
 		litShader.use();
 		litShader.setInt("_MainTex", 0);
 		litShader.setVec3("_EyePos", camera.position);
@@ -116,16 +130,22 @@ int main() {
 		tralaModel.draw();
 
 		glBindTextureUnit(0, glowTexture);
-
 		litShader.setInt("_MainTex", 0);
 		litShader.setInt("_Settings.NormalMap", false);
 		litShader.setMat4("_Model", planeTransform.modelMatrix());
 		plane.draw();
 
-		// Second Pass
-		//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		// SECOND PASS
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-
+		ppShader.use();
+		glBindVertexArray(dummyVAO);
+		glDisable(GL_DEPTH_TEST);
+		glBindTextureUnit(0, ppTex);
+		ppShader.setInt("_ScreenTexture", 0);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
 
 		drawUI();
 

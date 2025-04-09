@@ -1,12 +1,14 @@
 #version 450
 
-layout (location = 0) in vec2 aPos;
-layout (location = 1) in vec2 aTexCoords;
+out vec2 UV;
 
-out vec2 TexCoords;
+vec4 vertices[3] = {
+	vec4(-1,-1,0,0),
+	vec4(3,-1,2,0),
+	vec4(-1,3,0,2)
+};
 
-void main()
-{
-    gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0); 
-    TexCoords = aTexCoords;
-}  
+void main() {
+	UV = vertices[gl_VertexID].zw;
+	gl_Position = vec4(vertices[gl_VertexID].xy,0,1);
+}
