@@ -15,6 +15,11 @@ uniform vec3 _LightDirection = vec3(0.0,-1.0,0.0);
 uniform vec3 _LightColor = vec3(1.0);
 uniform vec3 _AmbientColor = vec3(0.3,0.4,0.46);
 
+uniform vec3 _Cube1Position;
+uniform vec3 _Cube1LightColor = vec3(1.0, 1.0, 0.0);
+uniform vec3 _Cube2Position;
+uniform vec3 _Cube2LightColor = vec3(0.0, 0.0, 1.0);
+
 struct Material{
 	float Ka;
 	float Kd;

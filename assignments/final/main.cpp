@@ -36,6 +36,8 @@ struct Material {
 // Init Assets
 ew::Transform tralaTransform;
 ew::Transform planeTransform;
+ew::Transform cube1Transform;
+ew::Transform cube2Transform;
 ew::Camera camera;
 ew::CameraController cameraController;
 
@@ -61,10 +63,20 @@ int main() {
 
 	ew::Model tralaModel = ew::Model("assets/tralalero_tralala.fbx");
 	GLuint tralaTexture = ew::loadTexture("assets/tralalero_color.png");
+
 	ew::Mesh plane = ew::Mesh(ew::createPlane(4.0f, 4.0f, 1));
-	GLuint glowTexture = ew::loadTexture("assets/plane_color.jpg");
+	GLuint metalTexture = ew::loadTexture("assets/metal_color.png");
+	GLuint metalNormal = ew::loadTexture("assets/metal_normal.png");
+
+	ew::Mesh cube1 = ew::Mesh(ew::createCube(1.0f));
+	GLuint glowTexture = ew::loadTexture("assets/glow_color.jpg");
+	ew::Mesh cube2 = ew::Mesh(ew::createCube(1.0f));
+	GLuint blueTexture = ew::loadTexture("assets/blue_color.jpg");
 
 	tralaTransform.scale *= 0.1f;
+
+	cube1Transform.position = glm::vec3(4.0f, 1.0f, -1.0f);
+	cube2Transform.position = glm::vec3(-4.0f, 2.0f, 1.0f);
 
 	camera.position = glm::vec3(0.0f, 2.0f, 4.0f);
 	camera.target = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -129,11 +141,23 @@ int main() {
 		litShader.setInt("_Settings.NormalMap", false);
 		tralaModel.draw();
 
+		glBindTextureUnit(0, metalTexture);
+		glBindTextureUnit(1, metalNormal);
+		litShader.setInt("_MainTex", 0);
+		litShader.setInt("_Settings.NormalMap", true);
+		litShader.setMat4("_Model", planeTransform.modelMatrix());
+		plane.draw();
+
 		glBindTextureUnit(0, glowTexture);
 		litShader.setInt("_MainTex", 0);
 		litShader.setInt("_Settings.NormalMap", false);
-		litShader.setMat4("_Model", planeTransform.modelMatrix());
-		plane.draw();
+		litShader.setMat4("_Model", cube1Transform.modelMatrix());
+		cube1.draw();
+
+		glBindTextureUnit(0, blueTexture);
+		litShader.setInt("_MainTex", 0);
+		litShader.setMat4("_Model", cube2Transform.modelMatrix());
+		cube2.draw();
 
 		// SECOND PASS
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
