@@ -37,7 +37,6 @@ struct DirLight {
 	glm::vec3 direction;
 	glm::vec3 ambient;
 	glm::vec3 diffuse;
-	glm::vec3 specular;
 };
 
 struct PointLight {
@@ -48,6 +47,7 @@ struct PointLight {
 	glm::vec3 ambient;
 	glm::vec3 diffuse;
 	glm::vec3 specular;
+	float intensity;
 };
 
 // Init Assets
@@ -97,13 +97,34 @@ int main() {
 
 	tralaTransform.scale *= 0.1f;
 
-	cube1Transform.position = glm::vec3(4.0f, 1.0f, -1.0f);
-	cube2Transform.position = glm::vec3(-4.0f, 2.0f, 1.0f);
+	cube1Transform.position = glm::vec3(2.0f, 1.0f, 0.0f);
+	cube2Transform.position = glm::vec3(-2.0f, 1.0f, 0.0f);
 
 	camera.position = glm::vec3(0.0f, 2.0f, 4.0f);
 	camera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
+
+	globalLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
+	globalLight.diffuse = glm::vec3(1.0f);
+	globalLight.ambient = glm::vec3(0.3, 0.4, 0.46);
+
+	glowCube.position = cube1Transform.position;
+	glowCube.diffuse = glm::vec3(1.0f, 1.0f, 0.0f);
+	glowCube.intensity = 5.0f;
+	glowCube.ambient = glm::vec3(0.3, 0.4, 0.46);
+	glowCube.constant = 1.0f;
+	glowCube.linear = 0.022f;
+	glowCube.quadratic = 0.0019f;
+
+	blueCube.position = cube2Transform.position;
+	blueCube.diffuse = glm::vec3(0.0f, 0.0f, 1.0f);
+	blueCube.intensity = 5.0f;
+	blueCube.ambient = glm::vec3(0.3, 0.4, 0.46);
+	blueCube.constant = 1.0f;
+	blueCube.linear = 0.022f;
+	blueCube.quadratic = 0.0019f;
+
 
 	// Init Renderer
 	glEnable(GL_CULL_FACE);
@@ -116,7 +137,7 @@ int main() {
 
 	glGenTextures(1, &ppTex);
 	glBindTexture(GL_TEXTURE_2D, ppTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1080, 720, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 1080, 720, 0, GL_RGBA, GL_FLOAT, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -161,6 +182,23 @@ int main() {
 		litShader.setFloat("_Material.Ks", material.Ks);
 		litShader.setFloat("_Material.Shininess", material.Shininess);
 		litShader.setInt("_Settings.NormalMap", false);
+		litShader.setVec3("_GlobalLight.direction", globalLight.direction);
+		litShader.setVec3("_GlobalLight.diffuse", globalLight.diffuse);
+		litShader.setVec3("_GlobalLight.ambient", globalLight.ambient);
+		litShader.setVec3("_Cube1Light.position", glowCube.position);
+		litShader.setVec3("_Cube1Light.diffuse", glowCube.diffuse);
+		litShader.setVec3("_Cube1Light.ambient", glowCube.ambient);
+		litShader.setFloat("_Cube1Light.constant", glowCube.constant);
+		litShader.setFloat("_Cube1Light.linear", glowCube.linear);
+		litShader.setFloat("_Cube1Light.quadratic", glowCube.quadratic);
+		litShader.setFloat("_Cube1Light.intensity", glowCube.intensity);
+		litShader.setVec3("_Cube2Light.position", blueCube.position);
+		litShader.setVec3("_Cube2Light.diffuse", blueCube.diffuse);
+		litShader.setVec3("_Cube2Light.ambient", blueCube.ambient);
+		litShader.setFloat("_Cube2Light.constant", blueCube.constant);
+		litShader.setFloat("_Cube2Light.linear", blueCube.linear);
+		litShader.setFloat("_Cube2Light.quadratic", blueCube.quadratic);
+		litShader.setFloat("_Cube2Light.intensity", blueCube.intensity);
 		tralaModel.draw();
 
 		glBindTextureUnit(0, metalTexture);
