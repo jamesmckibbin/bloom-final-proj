@@ -27,9 +27,9 @@ float prevFrameTime;
 float deltaTime;
 
 struct Material {
-	float Ka = 1.0;
-	float Kd = 0.5;
-	float Ks = 0.5;
+	float AmbientMod = 1.0;
+	float DiffuseMod = 0.5;
+	float SpecularMod = 0.5;
 	float Shininess = 16;
 }material;
 
@@ -46,7 +46,6 @@ struct PointLight {
 	float quadratic;
 	glm::vec3 ambient;
 	glm::vec3 diffuse;
-	glm::vec3 specular;
 	float intensity;
 };
 
@@ -212,9 +211,9 @@ int main() {
 		litShader.setVec3("_EyePos", camera.position);
 		litShader.setMat4("_Model", tralaTransform.modelMatrix());
 		litShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
-		litShader.setFloat("_Material.Ka", material.Ka);
-		litShader.setFloat("_Material.Kd", material.Kd);
-		litShader.setFloat("_Material.Ks", material.Ks);
+		litShader.setFloat("_Material.AmbientMod", material.AmbientMod);
+		litShader.setFloat("_Material.DiffuseMod", material.DiffuseMod);
+		litShader.setFloat("_Material.SpecularMod", material.SpecularMod);
 		litShader.setFloat("_Material.Shininess", material.Shininess);
 		litShader.setInt("_Settings.NormalMap", false);
 		litShader.setVec3("_GlobalLight.direction", globalLight.direction);
@@ -327,9 +326,9 @@ void drawUI() {
 		ImGui::Checkbox("Show Blur Map", &showBlurMap);
 	}
 	if (ImGui::CollapsingHeader("Material")) {
-		ImGui::SliderFloat("AmbientK", &material.Ka, 0.0f, 1.0f);
-		ImGui::SliderFloat("DiffuseK", &material.Kd, 0.0f, 1.0f);
-		ImGui::SliderFloat("SpecularK", &material.Ks, 0.0f, 1.0f);
+		ImGui::SliderFloat("AmbientK", &material.AmbientMod, 0.0f, 1.0f);
+		ImGui::SliderFloat("DiffuseK", &material.DiffuseMod, 0.0f, 1.0f);
+		ImGui::SliderFloat("SpecularK", &material.SpecularMod, 0.0f, 1.0f);
 		ImGui::SliderFloat("Shininess", &material.Shininess, 2.0f, 1024.0f);
 	}
 	ImGui::End();

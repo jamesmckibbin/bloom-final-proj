@@ -27,9 +27,9 @@ struct PointLight {
 };
 
 struct Material{
-	float Ka;
-	float Kd;
-	float Ks;
+	float AmbientMod;
+	float DiffuseMod;
+	float SpecularMod;
 	float Shininess;
 };
 
@@ -58,9 +58,9 @@ vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)
     float diffuseFactor = max(dot(normal, lightDir), 0.0);
     vec3 reflectDir = reflect(-lightDir, normal);
     float specularFactor = pow(max(dot(viewDir, reflectDir), 0.0), _Material.Shininess);
-    vec3 ambient  = _Material.Ka * light.ambient * vec3(texture(_MainTex, fs_in.TexCoord));
-    vec3 diffuse  = _Material.Kd * light.diffuse * diffuseFactor * vec3(texture(_MainTex, fs_in.TexCoord));
-    vec3 specular = specularFactor * vec3(texture(_MainTex, fs_in.TexCoord));
+    vec3 ambient  = _Material.AmbientMod * light.ambient * vec3(texture(_MainTex, fs_in.TexCoord));
+    vec3 diffuse  = _Material.DiffuseMod * light.diffuse * diffuseFactor * vec3(texture(_MainTex, fs_in.TexCoord));
+    vec3 specular = _Material.SpecularMod * specularFactor * vec3(texture(_MainTex, fs_in.TexCoord));
     return (ambient + diffuse + specularFactor);
 }
 
@@ -75,9 +75,9 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 worldPos, vec3 toEye)
     float distance = length(light.position - worldPos);
     float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));    
 
-    vec3 ambient  = _Material.Ka * light.ambient  * vec3(texture(_MainTex, fs_in.TexCoord));
-    vec3 diffuse  = _Material.Kd * light.diffuse  * light.intensity * diffuseFactor * vec3(texture(_MainTex, fs_in.TexCoord));
-    vec3 specular = _Material.Ks * specularFactor * vec3(texture(_MainTex, fs_in.TexCoord));
+    vec3 ambient  = _Material.AmbientMod * light.ambient  * vec3(texture(_MainTex, fs_in.TexCoord));
+    vec3 diffuse  = _Material.DiffuseMod * light.diffuse  * light.intensity * diffuseFactor * vec3(texture(_MainTex, fs_in.TexCoord));
+    vec3 specular = _Material.SpecularMod * specularFactor * vec3(texture(_MainTex, fs_in.TexCoord));
     ambient  *= attenuation;
     diffuse  *= attenuation;
     specular *= attenuation;
@@ -92,5 +92,9 @@ void main() {
     lightColor += CalcPointLight(_Cube2Light, normal, fs_in.WorldPos, toEye);
 
 	FragColor = vec4(lightColor, 1.0);
-    BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
+    float brightness = dot(FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+    if(brightness > 1.1)
+        BrightColor = vec4(FragColor.rgb, 1.0);
+    else
+        BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
