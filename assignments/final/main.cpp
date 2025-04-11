@@ -30,7 +30,7 @@ struct Material {
 	float Ka = 1.0;
 	float Kd = 0.5;
 	float Ks = 0.5;
-	float Shininess = 128;
+	float Shininess = 16;
 }material;
 
 struct DirLight {
@@ -62,11 +62,18 @@ DirLight globalLight;
 PointLight glowCube;
 PointLight blueCube;
 
-unsigned int ppFBO;
-unsigned int ppRBO;
-unsigned int ppTex;
-unsigned int depTex;
+unsigned int postProcessFBO;
+unsigned int postProcessRBO;
+unsigned int colorBuffers[2];
+unsigned int pingPongFBO[2];
+unsigned int pingPongBuffers[2];
 unsigned int dummyVAO;
+
+float gamma = 2.2f;
+float exposure = 1.0f;
+int pingPongAmount = 10;
+bool showBrightnessMap = false;
+bool showBlurMap = false;
 
 void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
 	camera->position = glm::vec3(0, 0, 5.0f);
@@ -81,7 +88,8 @@ int main() {
 
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader unlitShader = ew::Shader("assets/unlit.vert", "assets/unlit.frag");
-	ew::Shader ppShader = ew::Shader("assets/pp.vert", "assets/pp.frag");
+	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
+	ew::Shader pingPongShader = ew::Shader("assets/pingpong.vert", "assets/pingpong.frag");
 
 	ew::Model tralaModel = ew::Model("assets/tralalero_tralala.fbx");
 	GLuint tralaTexture = ew::loadTexture("assets/tralalero_color.png");
@@ -119,7 +127,7 @@ int main() {
 
 	blueCube.position = cube2Transform.position;
 	blueCube.diffuse = glm::vec3(0.0f, 0.0f, 1.0f);
-	blueCube.intensity = 5.0f;
+	blueCube.intensity = 10.0f;
 	blueCube.ambient = glm::vec3(0.3, 0.4, 0.46);
 	blueCube.constant = 1.0f;
 	blueCube.linear = 0.022f;
@@ -131,23 +139,50 @@ int main() {
 	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
 
+	glGenFramebuffers(2, pingPongFBO);
+	glGenTextures(2, pingPongBuffers);
+	for (unsigned int i = 0; i < 2; i++)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, pingPongFBO[i]);
+		glBindTexture(GL_TEXTURE_2D, pingPongBuffers[i]);
+		glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_RGBA16F, 1080, 720, 0, GL_RGBA, GL_FLOAT, NULL
+		);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(
+			GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingPongBuffers[i], 0
+		);
+	}
+
 	// Set Up Post Processing Frame Buffer
-	glGenFramebuffers(1, &ppFBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, ppFBO);
+	glGenFramebuffers(1, &postProcessFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, postProcessFBO);
 
-	glGenTextures(1, &ppTex);
-	glBindTexture(GL_TEXTURE_2D, ppTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, 1080, 720, 0, GL_RGBA, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ppTex, 0);
+	glGenTextures(2, colorBuffers);
+	for (unsigned int i = 0; i < 2; i++)
+	{
+		glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+		glTexImage2D(
+			GL_TEXTURE_2D, 0, GL_RGBA16F, 1080, 720, 0, GL_RGBA, GL_FLOAT, NULL
+		);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
+	}
 
-	glGenRenderbuffers(1, &ppRBO);
-	glBindRenderbuffer(GL_RENDERBUFFER, ppRBO);
+	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+	glDrawBuffers(2, attachments);
+
+	glGenRenderbuffers(1, &postProcessRBO);
+	glBindRenderbuffer(GL_RENDERBUFFER, postProcessRBO);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1080, 720);
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ppRBO);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, postProcessRBO);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -166,8 +201,8 @@ int main() {
 		cameraController.move(window, &camera, deltaTime);
 
 		// FIRST PASS
-		glBindFramebuffer(GL_FRAMEBUFFER, ppFBO);
-		glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+		glBindFramebuffer(GL_FRAMEBUFFER, postProcessFBO);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
 
@@ -220,16 +255,49 @@ int main() {
 		unlitShader.setMat4("_Model", cube2Transform.modelMatrix());
 		cube2.draw();
 
+		// PING PONG PASS
+		bool horizontal = true, first_iteration = true;
+		pingPongShader.use();
+		for (unsigned int i = 0; i < pingPongAmount; i++)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, pingPongFBO[horizontal]);
+			pingPongShader.setInt("horizontal", horizontal);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(
+				GL_TEXTURE_2D, first_iteration ? colorBuffers[1] : pingPongBuffers[!horizontal]
+			);
+			glBindVertexArray(dummyVAO);
+			glDisable(GL_DEPTH_TEST);
+			glDrawArrays(GL_TRIANGLES, 0, 3);
+			horizontal = !horizontal;
+			if (first_iteration)
+				first_iteration = false;
+		}
+
 		// SECOND PASS
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		ppShader.use();
+		postProcessShader.use();
 		glBindVertexArray(dummyVAO);
 		glDisable(GL_DEPTH_TEST);
-		glBindTextureUnit(0, ppTex);
-		ppShader.setInt("_ScreenTexture", 0);
+		if (showBrightnessMap) {
+			glBindTextureUnit(0, colorBuffers[1]);
+			glBindTextureUnit(1, colorBuffers[1]);
+		}
+		else if (showBlurMap){
+			glBindTextureUnit(0, pingPongBuffers[0]);
+			glBindTextureUnit(1, pingPongBuffers[0]);
+		}
+		else {
+			glBindTextureUnit(0, colorBuffers[0]);
+			glBindTextureUnit(1, pingPongBuffers[0]);
+		}
+		postProcessShader.setInt("_ScreenTexture", 0);
+		postProcessShader.setInt("_BloomBlur", 1);
+		postProcessShader.setFloat("_Exposure", exposure);
+		postProcessShader.setFloat("_Gamma", gamma);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
 		drawUI();
@@ -237,7 +305,7 @@ int main() {
 		glfwSwapBuffers(window);
 	}
 
-	glDeleteFramebuffers(1, &ppFBO);
+	glDeleteFramebuffers(1, &postProcessFBO);
 
 	printf("Shutting down...");
 }
@@ -250,6 +318,13 @@ void drawUI() {
 	ImGui::Begin("Settings");
 	if (ImGui::Button("Reset Camera")) {
 		resetCamera(&camera, &cameraController);
+	}
+	if (ImGui::CollapsingHeader("Bloom & HDR")) {
+		ImGui::SliderFloat("Gamma", &gamma, 0.5f, 4.0f);
+		ImGui::SliderFloat("Exposure", &exposure, 0.1f, 5.0f);
+		ImGui::SliderInt("Ping Pong Amount", &pingPongAmount, 4, 50);
+		ImGui::Checkbox("Show Brightness Map", &showBrightnessMap);
+		ImGui::Checkbox("Show Blur Map", &showBlurMap);
 	}
 	if (ImGui::CollapsingHeader("Material")) {
 		ImGui::SliderFloat("AmbientK", &material.Ka, 0.0f, 1.0f);
