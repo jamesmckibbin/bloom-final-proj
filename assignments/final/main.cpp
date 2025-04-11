@@ -33,6 +33,23 @@ struct Material {
 	float Shininess = 128;
 }material;
 
+struct DirLight {
+	glm::vec3 direction;
+	glm::vec3 ambient;
+	glm::vec3 diffuse;
+	glm::vec3 specular;
+};
+
+struct PointLight {
+	glm::vec3 position;
+	float constant;
+	float linear;
+	float quadratic;
+	glm::vec3 ambient;
+	glm::vec3 diffuse;
+	glm::vec3 specular;
+};
+
 // Init Assets
 ew::Transform tralaTransform;
 ew::Transform planeTransform;
@@ -40,6 +57,10 @@ ew::Transform cube1Transform;
 ew::Transform cube2Transform;
 ew::Camera camera;
 ew::CameraController cameraController;
+
+DirLight globalLight;
+PointLight glowCube;
+PointLight blueCube;
 
 unsigned int ppFBO;
 unsigned int ppRBO;
@@ -59,6 +80,7 @@ int main() {
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
+	ew::Shader unlitShader = ew::Shader("assets/unlit.vert", "assets/unlit.frag");
 	ew::Shader ppShader = ew::Shader("assets/pp.vert", "assets/pp.frag");
 
 	ew::Model tralaModel = ew::Model("assets/tralalero_tralala.fbx");
@@ -81,7 +103,7 @@ int main() {
 	camera.position = glm::vec3(0.0f, 2.0f, 4.0f);
 	camera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	camera.aspectRatio = (float)screenWidth / screenHeight;
-	camera.fov = 90.0f;
+	camera.fov = 60.0f;
 
 	// Init Renderer
 	glEnable(GL_CULL_FACE);
@@ -148,15 +170,16 @@ int main() {
 		litShader.setMat4("_Model", planeTransform.modelMatrix());
 		plane.draw();
 
+		unlitShader.use();
 		glBindTextureUnit(0, glowTexture);
-		litShader.setInt("_MainTex", 0);
-		litShader.setInt("_Settings.NormalMap", false);
-		litShader.setMat4("_Model", cube1Transform.modelMatrix());
+		unlitShader.setInt("_MainTex", 0);
+		unlitShader.setMat4("_Model", cube1Transform.modelMatrix());
+		unlitShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		cube1.draw();
 
 		glBindTextureUnit(0, blueTexture);
-		litShader.setInt("_MainTex", 0);
-		litShader.setMat4("_Model", cube2Transform.modelMatrix());
+		unlitShader.setInt("_MainTex", 0);
+		unlitShader.setMat4("_Model", cube2Transform.modelMatrix());
 		cube2.draw();
 
 		// SECOND PASS
