@@ -205,6 +205,7 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
 
+		// DRAW SHARK
 		glBindTextureUnit(0, tralaTexture);
 		litShader.use();
 		litShader.setInt("_MainTex", 0);
@@ -235,6 +236,7 @@ int main() {
 		litShader.setFloat("_Cube2Light.intensity", blueCube.intensity);
 		tralaModel.draw();
 
+		// DRAW GROUND
 		glBindTextureUnit(0, metalTexture);
 		glBindTextureUnit(1, metalNormal);
 		litShader.setInt("_MainTex", 0);
@@ -242,6 +244,7 @@ int main() {
 		litShader.setMat4("_Model", planeTransform.modelMatrix());
 		plane.draw();
 
+		// DRAW GLOWSTONE
 		unlitShader.use();
 		glBindTextureUnit(0, glowTexture);
 		unlitShader.setInt("_MainTex", 0);
@@ -249,6 +252,7 @@ int main() {
 		unlitShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		cube1.draw();
 
+		// DRAW LIGHTNING
 		glBindTextureUnit(0, blueTexture);
 		unlitShader.setInt("_MainTex", 0);
 		unlitShader.setMat4("_Model", cube2Transform.modelMatrix());
@@ -273,7 +277,7 @@ int main() {
 				first_iteration = false;
 		}
 
-		// SECOND PASS
+		// RENDER TEXTURE PASS
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
