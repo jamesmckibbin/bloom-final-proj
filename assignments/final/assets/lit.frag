@@ -18,11 +18,11 @@ struct DirLight {
 
 struct PointLight {    
     vec3 position;
+    vec3 ambient;
+    vec3 diffuse;
     float constant;
     float linear;
     float quadratic;
-    vec3 ambient;
-    vec3 diffuse;
     float intensity;
 };
 
@@ -34,7 +34,7 @@ struct Material{
 };
 
 struct MiscSettings{
-	bool NormalMap;
+	bool UseDirLight;
 };
 
 uniform sampler2D _MainTex;
@@ -88,7 +88,12 @@ void main() {
 	vec3 normal = normalize(fs_in.WorldNormal);
 	vec3 toEye = normalize(_EyePos - fs_in.WorldPos);
 
-    vec3 lightColor = CalcPointLight(_Cube1Light, normal, fs_in.WorldPos, toEye);
+    vec3 lightColor;
+
+    if (_Settings.UseDirLight) {
+        lightColor += CalcDirLight(_GlobalLight, normal, toEye);
+    }
+    lightColor += CalcPointLight(_Cube1Light, normal, fs_in.WorldPos, toEye);
     lightColor += CalcPointLight(_Cube2Light, normal, fs_in.WorldPos, toEye);
 
 	FragColor = vec4(lightColor, 1.0);

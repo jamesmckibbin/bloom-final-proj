@@ -18,19 +18,14 @@
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 GLFWwindow* initWindow(const char* title, int width, int height);
+void resetCamera(ew::Camera* camera, ew::CameraController* controller);
 void drawUI();
-
-//Global state
-int screenWidth = 1080;
-int screenHeight = 720;
-float prevFrameTime;
-float deltaTime;
 
 struct Material {
 	float AmbientMod = 1.0;
-	float DiffuseMod = 0.5;
+	float DiffuseMod = 0.25;
 	float SpecularMod = 0.5;
-	float Shininess = 16;
+	float Shininess = 128;
 }material;
 
 struct DirLight {
@@ -41,26 +36,36 @@ struct DirLight {
 
 struct PointLight {
 	glm::vec3 position;
+	glm::vec3 ambient;
+	glm::vec3 diffuse;
 	float constant;
 	float linear;
 	float quadratic;
-	glm::vec3 ambient;
-	glm::vec3 diffuse;
 	float intensity;
 };
 
-// Init Assets
+// Window Data
+int screenWidth = 1080;
+int screenHeight = 720;
+float prevFrameTime;
+float deltaTime;
+
+// Transforms
 ew::Transform tralaTransform;
 ew::Transform planeTransform;
 ew::Transform cube1Transform;
 ew::Transform cube2Transform;
+
+// Camera
 ew::Camera camera;
 ew::CameraController cameraController;
 
+// Lights
 DirLight globalLight;
 PointLight glowCube;
 PointLight blueCube;
 
+// Renderer Data
 unsigned int postProcessFBO;
 unsigned int postProcessRBO;
 unsigned int colorBuffers[2];
@@ -68,54 +73,55 @@ unsigned int pingPongFBO[2];
 unsigned int pingPongBuffers[2];
 unsigned int dummyVAO;
 
+// Bloom & HDR Settings
 float gamma = 2.2f;
 float exposure = 1.0f;
 int pingPongAmount = 10;
+bool useDirLight = true;
 bool showBrightnessMap = false;
 bool showBlurMap = false;
-
-void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
-	camera->position = glm::vec3(0, 0, 5.0f);
-	camera->target = glm::vec3(0);
-	controller->yaw = controller->pitch = 0;
-}
 
 int main() {
 	// Init Window
 	GLFWwindow* window = initWindow("Beautiful Awesome OpenGL", screenWidth, screenHeight);
 	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
+	// Init Shaders
 	ew::Shader litShader = ew::Shader("assets/lit.vert", "assets/lit.frag");
 	ew::Shader unlitShader = ew::Shader("assets/unlit.vert", "assets/unlit.frag");
 	ew::Shader postProcessShader = ew::Shader("assets/postprocess.vert", "assets/postprocess.frag");
 	ew::Shader pingPongShader = ew::Shader("assets/pingpong.vert", "assets/pingpong.frag");
 
+	// Init Models
 	ew::Model tralaModel = ew::Model("assets/tralalero_tralala.fbx");
-	GLuint tralaTexture = ew::loadTexture("assets/tralalero_color.png");
-
 	ew::Mesh plane = ew::Mesh(ew::createPlane(4.0f, 4.0f, 1));
+	ew::Mesh cube1 = ew::Mesh(ew::createCube(1.0f));
+	ew::Mesh cube2 = ew::Mesh(ew::createCube(1.0f));
+
+	// Init Textures
+	GLuint tralaTexture = ew::loadTexture("assets/tralalero_color.png");
 	GLuint metalTexture = ew::loadTexture("assets/metal_color.png");
 	GLuint metalNormal = ew::loadTexture("assets/metal_normal.png");
-
-	ew::Mesh cube1 = ew::Mesh(ew::createCube(1.0f));
 	GLuint glowTexture = ew::loadTexture("assets/glow_color.jpg");
-	ew::Mesh cube2 = ew::Mesh(ew::createCube(1.0f));
 	GLuint blueTexture = ew::loadTexture("assets/blue_color.jpg");
 
-	tralaTransform.scale *= 0.1f;
-
-	cube1Transform.position = glm::vec3(2.0f, 1.0f, 0.0f);
-	cube2Transform.position = glm::vec3(-2.0f, 1.0f, 0.0f);
-
+	// Init Camera
 	camera.position = glm::vec3(0.0f, 2.0f, 4.0f);
 	camera.target = glm::vec3(0.0f, 0.0f, 0.0f);
 	camera.aspectRatio = (float)screenWidth / screenHeight;
 	camera.fov = 60.0f;
 
+	// Adjust Shark Scale & Set Cube Positions
+	tralaTransform.scale *= 0.1f;
+	cube1Transform.position = glm::vec3(2.0f, 1.0f, 0.0f);
+	cube2Transform.position = glm::vec3(-2.0f, 1.0f, 0.0f);
+
+	// Init Global Light
 	globalLight.direction = glm::vec3(0.0f, -1.0f, 0.0f);
 	globalLight.diffuse = glm::vec3(1.0f);
 	globalLight.ambient = glm::vec3(0.3, 0.4, 0.46);
 
+	// Init Glow Cube Point Light
 	glowCube.position = cube1Transform.position;
 	glowCube.diffuse = glm::vec3(1.0f, 1.0f, 0.0f);
 	glowCube.intensity = 5.0f;
@@ -124,6 +130,7 @@ int main() {
 	glowCube.linear = 0.022f;
 	glowCube.quadratic = 0.0019f;
 
+	// Init Blue Cube Point Light
 	blueCube.position = cube2Transform.position;
 	blueCube.diffuse = glm::vec3(0.0f, 0.0f, 1.0f);
 	blueCube.intensity = 10.0f;
@@ -132,12 +139,12 @@ int main() {
 	blueCube.linear = 0.022f;
 	blueCube.quadratic = 0.0019f;
 
-
 	// Init Renderer
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
 	glEnable(GL_DEPTH_TEST);
 
+	// Init Ping Pong Buffers
 	glGenFramebuffers(2, pingPongFBO);
 	glGenTextures(2, pingPongBuffers);
 	for (unsigned int i = 0; i < 2; i++)
@@ -156,10 +163,11 @@ int main() {
 		);
 	}
 
-	// Set Up Post Processing Frame Buffer
+	// Init Post Processing Buffer
 	glGenFramebuffers(1, &postProcessFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, postProcessFBO);
 
+	// Init Frame Buffers
 	glGenTextures(2, colorBuffers);
 	for (unsigned int i = 0; i < 2; i++)
 	{
@@ -174,39 +182,45 @@ int main() {
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
 	}
 
+	// Set Render Target Count
 	unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
 	glDrawBuffers(2, attachments);
 
+	// Init Depth/Stencil Buffer
 	glGenRenderbuffers(1, &postProcessRBO);
 	glBindRenderbuffer(GL_RENDERBUFFER, postProcessRBO);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 1080, 720);
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, postProcessRBO);
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
+	// Create Dummy Vertex Array Object
 	glCreateVertexArrays(1, &dummyVAO);
+
+	// Finalize Renderer Setup
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
+		// Get Frame Deltatime
 		float time = (float)glfwGetTime();
 		deltaTime = time - prevFrameTime;
 		prevFrameTime = time;
 
-		//RENDER
+		// Update Shark & Camera
 		tralaTransform.rotation = glm::rotate(tralaTransform.rotation, deltaTime, glm::vec3(0.0, 1.0, 0.0));
-
 		cameraController.move(window, &camera, deltaTime);
 
-		// FIRST PASS
+		// START MAIN RENDERING
+
+		// 1. SCENE PASS
+
 		glBindFramebuffer(GL_FRAMEBUFFER, postProcessFBO);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glEnable(GL_DEPTH_TEST);
-
-		// DRAW SHARK
 		glBindTextureUnit(0, tralaTexture);
+
 		litShader.use();
 		litShader.setInt("_MainTex", 0);
 		litShader.setVec3("_EyePos", camera.position);
@@ -216,7 +230,7 @@ int main() {
 		litShader.setFloat("_Material.DiffuseMod", material.DiffuseMod);
 		litShader.setFloat("_Material.SpecularMod", material.SpecularMod);
 		litShader.setFloat("_Material.Shininess", material.Shininess);
-		litShader.setInt("_Settings.NormalMap", false);
+		litShader.setInt("_Settings.UseDirLight", useDirLight);
 		litShader.setVec3("_GlobalLight.direction", globalLight.direction);
 		litShader.setVec3("_GlobalLight.diffuse", globalLight.diffuse);
 		litShader.setVec3("_GlobalLight.ambient", globalLight.ambient);
@@ -236,7 +250,6 @@ int main() {
 		litShader.setFloat("_Cube2Light.intensity", blueCube.intensity);
 		tralaModel.draw();
 
-		// DRAW GROUND
 		glBindTextureUnit(0, metalTexture);
 		glBindTextureUnit(1, metalNormal);
 		litShader.setInt("_MainTex", 0);
@@ -244,7 +257,6 @@ int main() {
 		litShader.setMat4("_Model", planeTransform.modelMatrix());
 		plane.draw();
 
-		// DRAW GLOWSTONE
 		unlitShader.use();
 		glBindTextureUnit(0, glowTexture);
 		unlitShader.setInt("_MainTex", 0);
@@ -252,13 +264,13 @@ int main() {
 		unlitShader.setMat4("_ViewProjection", camera.projectionMatrix() * camera.viewMatrix());
 		cube1.draw();
 
-		// DRAW LIGHTNING
 		glBindTextureUnit(0, blueTexture);
 		unlitShader.setInt("_MainTex", 0);
 		unlitShader.setMat4("_Model", cube2Transform.modelMatrix());
 		cube2.draw();
 
-		// PING PONG PASS
+		// 2. PING PONG PASS
+
 		bool horizontal = true, first_iteration = true;
 		pingPongShader.use();
 		for (unsigned int i = 0; i < pingPongAmount; i++)
@@ -277,7 +289,8 @@ int main() {
 				first_iteration = false;
 		}
 
-		// RENDER TEXTURE PASS
+		// 3. RENDER TEXTURE PASS
+
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -303,12 +316,19 @@ int main() {
 		postProcessShader.setFloat("_Gamma", gamma);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 
+		// END MAIN RENDERING
+		
+		// Draw ImGui
 		drawUI();
 
+		// Present
 		glfwSwapBuffers(window);
 	}
 
+	// Clean Up Render Data
 	glDeleteFramebuffers(1, &postProcessFBO);
+	glDeleteRenderbuffers(1, &postProcessRBO);
+	glDeleteFramebuffers(2, pingPongFBO);
 
 	printf("Shutting down...");
 }
@@ -326,6 +346,7 @@ void drawUI() {
 		ImGui::SliderFloat("Gamma", &gamma, 0.5f, 4.0f);
 		ImGui::SliderFloat("Exposure", &exposure, 0.1f, 5.0f);
 		ImGui::SliderInt("Ping Pong Amount", &pingPongAmount, 4, 50);
+		ImGui::Checkbox("Use Directional Light", &useDirLight);
 		ImGui::Checkbox("Show Brightness Map", &showBrightnessMap);
 		ImGui::Checkbox("Show Blur Map", &showBlurMap);
 	}
@@ -374,5 +395,11 @@ GLFWwindow* initWindow(const char* title, int width, int height) {
 	ImGui_ImplOpenGL3_Init();
 
 	return window;
+}
+
+void resetCamera(ew::Camera* camera, ew::CameraController* controller) {
+	camera->position = glm::vec3(0, 2, 4);
+	camera->target = glm::vec3(0);
+	controller->yaw = controller->pitch = 0;
 }
 
